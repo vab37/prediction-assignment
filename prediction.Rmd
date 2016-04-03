@@ -1,0 +1,133 @@
+---
+title: "Prediction Assignment"
+output: html_document
+---
+###Background###
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> 
+
+###Data Input ###
+
+The training data:<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+```{r, echo=TRUE}
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("", "NA", "NULL", "#DIV/0!"))
+
+dim(training)
+
+```
+
+###Data Cleaning###
+
+Before we start the model development process, we will clean the input data. There are 3 steps we will do for data cleaning
+
+1) Checking and Removing Fields with all NA's
+
+```{r, echo=TRUE}
+
+trainingna <- training[ , colSums(is.na(training)) == 0]
+#trainingna <- Filter(function(x)!all(is.na(x)), training)
+dim(trainingna)
+
+```
+
+2) Identifying and removing features which may be irrelevant for the study
+
+```{r, echo=TRUE}
+
+irrelevant = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+trainingrel <- trainingna[, -which(names(trainingna) %in% irrelevant)]
+dim(trainingrel)
+
+```
+
+3) Check and remove variables with near zero variance as they may not be able to explain the variability of the response variable
+
+```{r, echo=TRUE}
+
+library(caret)
+zeroVar= nearZeroVar(trainingrel[sapply(trainingrel, is.numeric)], saveMetrics = TRUE)
+trainingvar = trainingrel[,zeroVar[, 'nzv']==0]
+dim(trainingvar)
+
+```
+
+###Data Partitioning###
+
+Partitioning the processed training data set into training and cross validation set
+
+```{r, echo=TRUE}
+
+library(caret);library(kernlab);
+#Breaking data into 75% training and 25% testing data for cross data validation
+intrain <- createDataPartition(y=trainingvar$classe,p=0.6,list=FALSE)
+trainingfinal <- trainingvar[intrain,]
+trainingcv <- trainingvar[-intrain,]
+dim(trainingfinal)
+dim(trainingcv)
+
+```
+
+
+###Model Building & Prediction With Decision Tree###
+
+Model Building with Decision tree
+
+```{r, echo=TRUE}
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+modFitDT <- rpart(classe ~ ., data = trainingfinal, method="class")
+fancyRpartPlot(modFitDT)
+
+```
+
+Prediction on cross validation set With Decision Tree
+
+```{r, echo=TRUE}
+prediction <- predict(modFitDT, trainingcv, type = "class")
+confusionMatrix(prediction, trainingcv$classe)
+
+```
+We observe an accuracy of 73.37%
+
+###Model Building & Prediction With Random Forest###
+
+Model Building with Random Forest
+
+```{r, echo=TRUE}
+library(randomForest)
+modFitRF <- randomForest(classe ~ ., data = trainingfinal, ntree = 1000)
+
+```
+
+Prediction on cross validation set With Random Forest
+
+```{r, echo=TRUE}
+prediction <- predict(modFitRF, trainingcv, type = "class")
+confusionMatrix(prediction, trainingcv$classe)
+
+```
+We observe an accuracy of 99.45%
+
+
+###Predicting on the Test Set using Random Forest###
+
+Since we see significantly greater accuracy with random forest algorithm, we apply random forest to the test set and print the predicted values of response variable
+
+```{r, echo=TRUE}
+
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("", "NA", "NULL", "#DIV/0!"))
+
+dim(testing)
+
+testpredictions <- as.character(predict(modFitRF,newdata=testing))
+print(testpredictions)
+
+
+```
+
+
+
